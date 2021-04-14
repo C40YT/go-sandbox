@@ -15,7 +15,7 @@ type SubCgroup struct {
 }
 
 // ErrNotInitialized returned when trying to read from not initialized cgroup
-var ErrNotInitialized = errors.New("cgroup was not initialized")
+var ErrNotInitialized = errors.New("sub cgroup was not initialized")
 
 // NewSubCgroup creates a cgroup accessor with given path (path needs to be created in advance)
 func NewSubCgroup(p string) *SubCgroup {

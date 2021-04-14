@@ -1,3 +1,6 @@
+/*
+	Get Cgroup structure with operation methods.
+*/
 package cgroup
 
 import (
@@ -18,65 +21,6 @@ type Cgroup struct {
 	pids    *SubCgroup
 
 	all []*SubCgroup
-}
-
-// Build creates new cgrouup directories
-func (b *Builder) Build() (cg *Cgroup, err error) {
-	var (
-		paths     []string
-		subCgroup = make(map[int]*SubCgroup)
-		info      = getCachedCgroupHierarchy()
-	)
-	// if failed, remove potential created directory
-	defer func() {
-		if err != nil {
-			removeAll(paths...)
-		}
-	}()
-	for _, c := range []struct {
-		enable bool
-		name   string
-	}{
-		{b.CPU, "cpu"},
-		{b.CPUSet, "cpuset"},
-		{b.CPUAcct, "cpuacct"},
-		{b.Memory, "memory"},
-		{b.Pids, "pids"},
-	} {
-		if !c.enable {
-			continue
-		}
-		h := info[c.name]
-		if subCgroup[h] == nil {
-			var path string
-			if path, err = CreateSubCgroupPath(c.name, b.Prefix); err != nil {
-				return
-			}
-			paths = append(paths, path)
-			subCgroup[h] = NewSubCgroup(path)
-		}
-	}
-
-	if b.CPUSet {
-		if err = initCpuset(subCgroup[info["cpuset"]].path); err != nil {
-			return
-		}
-	}
-
-	var all []*SubCgroup
-	for _, v := range subCgroup {
-		all = append(all, v)
-	}
-
-	return &Cgroup{
-		prefix:  b.Prefix,
-		cpu:     subCgroup[info["cpu"]],
-		cpuset:  subCgroup[info["cpuset"]],
-		cpuacct: subCgroup[info["cpuacct"]],
-		memory:  subCgroup[info["memory"]],
-		pids:    subCgroup[info["pids"]],
-		all:     all,
-	}, nil
 }
 
 // AddProc writes cgroup.procs to all sub-cgroup
@@ -208,22 +152,4 @@ func copyCgroupPropertyFromParent(path, name string) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(path, name), b, filePerm)
-}
-
-func remove(name string) error {
-	if name != "" {
-		return os.Remove(name)
-	}
-	return nil
-}
-
-func removeAll(name ...string) error {
-	var err1 error
-	for _, n := range name {
-		err := remove(n)
-		if err != nil && err1 == nil {
-			err1 = err
-		}
-	}
-	return err1
 }

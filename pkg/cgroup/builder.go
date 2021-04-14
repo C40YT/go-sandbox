@@ -1,3 +1,8 @@
+/*
+	Config cgroup.
+	Use Builder pattern to initialize Cgroup.
+	Builder.build() returns cgroup.
+*/
 package cgroup
 
 import (
@@ -6,7 +11,6 @@ import (
 )
 
 // Builder builds cgroup directories
-// available: cpuacct, memory, pids
 type Builder struct {
 	Prefix string
 
@@ -84,4 +88,69 @@ func (b *Builder) String() string {
 		}
 	}
 	return fmt.Sprintf("cgroup builder: [%s]", strings.Join(s, ", "))
+}
+
+// Build creates new cgroup directories
+func (b *Builder) Build() (cg *Cgroup, err error) {
+	// sub cgroup configured must be supported in current environment
+	hierarchyMap, err := GetCgroupHierarchy()
+	if err != nil {
+		// Could not get cgroup information in this machine
+		return
+	}
+
+	var subPaths []string
+	subCgroup := make(map[int]*SubCgroup) //the index is a hierarchy number
+
+	// if failed, remove potential created directory
+	defer func() {
+		if err != nil {
+			_ = removeAll(subPaths...)
+		}
+	}()
+
+	for _, c := range []struct {
+		enable    bool
+		groupName string
+	}{
+		{b.CPU, "cpu"},
+		{b.CPUSet, "cpuset"},
+		{b.CPUAcct, "cpuacct"},
+		{b.Memory, "memory"},
+		{b.Pids, "pids"},
+	} {
+		if !c.enable {
+			continue
+		}
+		h := hierarchyMap[c.groupName]
+		if subCgroup[h] == nil {
+			var subPath string
+			if subPath, err = createTempDir(basePath, c.groupName, b.Prefix); err != nil {
+				return
+			}
+			subPaths = append(subPaths, subPath)
+			subCgroup[h] = NewSubCgroup(subPath)
+		}
+	}
+
+	if b.CPUSet {
+		if err = initCpuset(subCgroup[hierarchyMap["cpuset"]].path); err != nil {
+			return
+		}
+	}
+
+	var all []*SubCgroup
+	for _, v := range subCgroup {
+		all = append(all, v)
+	}
+
+	return &Cgroup{
+		prefix:  b.Prefix,
+		cpu:     subCgroup[hierarchyMap["cpu"]],
+		cpuset:  subCgroup[hierarchyMap["cpuset"]],
+		cpuacct: subCgroup[hierarchyMap["cpuacct"]],
+		memory:  subCgroup[hierarchyMap["memory"]],
+		pids:    subCgroup[hierarchyMap["pids"]],
+		all:     all,
+	}, nil
 }
