@@ -1,6 +1,7 @@
 package cgroup
 
 import (
+	"io/ioutil"
 	"os"
 	"path"
 )
@@ -20,7 +21,7 @@ func createTempDir(elem ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return os.MkdirTemp(base, "")
+	return ioutil.TempDir(base, "")
 }
 
 func remove(filename string) (err error) {
